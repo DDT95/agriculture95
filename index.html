@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Observatoire cartographique de l'agriculture dans le Val-d'Oise : parcelles RPG, cultures, agriculture biologique, eau et environnement.">
+  <meta name="theme-color" content="#000091">
+  <title>Agriculture 95 — Observatoire cartographique</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynhW9r+5jMZrfK1vU6Xzq4N08xgE=" crossorigin="">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#map">Aller directement à la carte</a>
+
+  <header class="site-header">
+    <div class="rf-brand" aria-label="République française — Préfecture du Val-d'Oise">
+      <div class="rf-flag" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="rf-text"><strong>RÉPUBLIQUE<br>FRANÇAISE</strong><small>Liberté · Égalité · Fraternité</small></div>
+    </div>
+    <div class="header-title">
+      <p class="eyebrow">Direction départementale des territoires du Val-d’Oise</p>
+      <h1>Agriculture 95</h1>
+      <p>Explorer les parcelles agricoles, les cultures et les enjeux territoriaux du Val-d’Oise.</p>
+    </div>
+    <div class="header-meta">
+      <span class="status-pill" id="global-status"><span class="status-dot"></span>Initialisation</span>
+      <span class="update-date">Version 1.0 · 27 juillet 2026</span>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="left-panel" id="left-panel" aria-label="Outils et légende">
+      <section class="intro-card">
+        <h2>Le territoire agricole en un clic</h2>
+        <p>Cliquez sur une parcelle pour connaître sa culture déclarée, sa surface, son millésime et les informations territoriales disponibles.</p>
+        <div class="key-figures" aria-label="État des données chargées">
+          <div><strong id="commune-count">—</strong><span>communes</span></div>
+          <div><strong id="parcel-count">0</strong><span>parcelles affichées</span></div>
+          <div><strong id="active-layer-count">2</strong><span>couches actives</span></div>
+        </div>
+      </section>
+
+      <section class="search-card">
+        <label for="commune-search">Rechercher une commune</label>
+        <div class="search-row">
+          <input id="commune-search" type="search" autocomplete="off" placeholder="Ex. Magny-en-Vexin">
+          <button id="search-button" type="button" title="Rechercher">Rechercher</button>
+        </div>
+        <div id="search-results" class="search-results" role="listbox" aria-label="Résultats de recherche"></div>
+      </section>
+
+      <section class="layers-card">
+        <div class="section-heading">
+          <h2>Légende et couches</h2>
+          <button id="collapse-layers" class="icon-button" type="button" aria-expanded="true" aria-controls="layers-content">−</button>
+        </div>
+        <div id="layers-content">
+          <div class="layer-group">
+            <h3>Agriculture</h3>
+            <label class="layer-row"><input type="checkbox" data-layer="rpg" checked><span class="swatch swatch-rpg"></span><span><strong>Parcelles agricoles (RPG)</strong><small>Chargées autour de la zone visible</small></span></label>
+            <label class="layer-row"><input type="checkbox" data-layer="communes" checked><span class="swatch swatch-communes"></span><span><strong>Communes</strong><small>Limites administratives du Val-d’Oise</small></span></label>
+            <label class="layer-row"><input type="checkbox" data-layer="bio"><span class="swatch swatch-bio"></span><span><strong>Opérateurs biologiques</strong><small>Recherche autour du point sélectionné</small></span></label>
+          </div>
+          <div class="layer-group">
+            <h3>Contexte</h3>
+            <label class="layer-row"><input type="checkbox" data-layer="water"><span class="swatch swatch-water"></span><span><strong>Hydrographie</strong><small>Fond contextuel IGN lorsque disponible</small></span></label>
+            <label class="layer-row"><input type="checkbox" data-layer="orthophoto"><span class="swatch swatch-photo"></span><span><strong>Photographies aériennes</strong><small>Fond IGN — peut être plus lent</small></span></label>
+          </div>
+          <div class="legend-crops">
+            <h3>Familles de cultures</h3>
+            <div class="crop-grid" id="crop-legend"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sources-card">
+        <h2>Sources principales</h2>
+        <p>IGN · RPG, API Carto et limites administratives<br>Agence Bio · opérateurs certifiés<br>OpenStreetMap · fond cartographique</p>
+        <button id="open-about" class="text-button" type="button">Méthode, sources et limites</button>
+      </section>
+    </aside>
+
+    <section class="map-wrap" aria-label="Carte interactive de l'agriculture du Val-d'Oise">
+      <div id="map" tabindex="0"></div>
+      <div class="map-toolbar" aria-label="Outils cartographiques">
+        <button id="toggle-menu" class="tool-button mobile-only" type="button" aria-label="Ouvrir la légende">☰</button>
+        <button id="home-view" class="tool-button" type="button" title="Recentrer sur le Val-d'Oise">⌂</button>
+        <button id="locate-me" class="tool-button" type="button" title="Me géolocaliser">◎</button>
+        <button id="clear-selection" class="tool-button" type="button" title="Effacer la sélection">×</button>
+      </div>
+      <div id="map-message" class="map-message" role="status" aria-live="polite"></div>
+      <div class="zoom-hint" id="zoom-hint">Zoomez pour afficher les parcelles agricoles.</div>
+    </section>
+
+    <aside class="details-panel" id="details-panel" aria-label="Informations sur la sélection" aria-hidden="true">
+      <div class="details-header">
+        <div><p class="eyebrow">Position sélectionnée</p><h2 id="details-title">Informations agricoles</h2></div>
+        <button id="close-details" class="icon-button" type="button" aria-label="Fermer le panneau">×</button>
+      </div>
+      <div class="details-tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="parcel">Parcelle</button>
+        <button role="tab" aria-selected="false" data-tab="territory">Territoire</button>
+        <button role="tab" aria-selected="false" data-tab="bio">Bio</button>
+        <button role="tab" aria-selected="false" data-tab="sources">Sources</button>
+      </div>
+      <div class="details-content">
+        <section class="tab-panel active" data-panel="parcel">
+          <div id="parcel-loading" class="loading-block hidden"><span class="spinner"></span>Interrogation du registre parcellaire graphique…</div>
+          <div id="parcel-content" class="info-stack"></div>
+        </section>
+        <section class="tab-panel" data-panel="territory"><div id="territory-content" class="info-stack"></div></section>
+        <section class="tab-panel" data-panel="bio"><div id="bio-content" class="info-stack"></div></section>
+        <section class="tab-panel" data-panel="sources"><div id="source-content" class="info-stack"></div></section>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="about-dialog">
+    <form method="dialog">
+      <div class="dialog-header"><h2>Méthode, sources et limites</h2><button class="icon-button" value="close" aria-label="Fermer">×</button></div>
+      <div class="dialog-body">
+        <h3>Ce que montre la carte</h3>
+        <p>Le Registre parcellaire graphique recense les surfaces déclarées dans le cadre de la politique agricole commune. Il ne constitue pas un inventaire exhaustif de toutes les terres agricoles.</p>
+        <h3>Actualisation</h3>
+        <p>Les données sont interrogées à la demande auprès des services officiels. Le millésime renvoyé par l’API est affiché lorsqu’il est fourni.</p>
+        <h3>Fiabilité</h3>
+        <p>Une absence de résultat signifie qu’aucune information n’a été renvoyée pour le point ou que la source est temporairement indisponible. Aucune approximation n’est présentée comme une donnée certaine.</p>
+        <h3>Vie privée</h3>
+        <p>La carte n’affiche ni nom d’exploitant issu du RPG, ni information cadastrale nominative. Les opérateurs biologiques affichés sont ceux publiés par l’Agence Bio.</p>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
