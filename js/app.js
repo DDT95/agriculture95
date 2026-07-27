@@ -1,68 +1,120 @@
-(() => {
-  'use strict';
-  const C = window.APP_CONFIG;
-  const state = { communes:null, communeLayer:null, rpgLayer:null, selectionLayer:null, marker:null, ortho:null, hydro:null, rpgEnabled:true, lastRpgKey:'', activeLayers:new Set(['rpg','communes']) };
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
+(()=>{
+"use strict";
+const C=window.APP_CONFIG,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const state={communes:null,communesLayer:null,rpgLayer:null,selection:null,marker:null,rpg:true,communesOn:true,orthoOn:false,lastKey:"",requestId:0};
+const map=L.map("map",{zoomControl:true,minZoom:9,maxZoom:19,maxBounds:[[48.70,1.35],[49.40,2.85]],maxBoundsViscosity:.65});
+map.fitBounds(C.bounds,{padding:[18,18]});
+const osm=L.tileLayer(C.osm,{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
+const ortho=L.tileLayer(C.ortho,{maxZoom:19,attribution:"© IGN"});
+L.control.scale({imperial:false}).addTo(map);
+state.rpgLayer=L.geoJSON(null,{style:parcelStyle,onEachFeature:(f,l)=>l.on("click",e=>{L.DomEvent.stopPropagation(e);select(e.latlng,f);})}).addTo(map);
+state.selection=L.geoJSON(null,{style:{color:"#e1000f",weight:4,fillColor:"#e1000f",fillOpacity:.12},interactive:false}).addTo(map);
 
-  const map = L.map('map', { zoomControl:true, minZoom:8, maxZoom:19, maxBounds:[[48.65,1.25],[49.45,2.9]], maxBoundsViscosity:.7 }).setView(C.initialView.center,C.initialView.zoom);
-  const osm = L.tileLayer(C.baseLayers.osm.url,C.baseLayers.osm).addTo(map);
-  state.ortho = L.tileLayer(C.baseLayers.ortho.url,C.baseLayers.ortho);
-  state.hydro = L.tileLayer(C.baseLayers.hydro.url,C.baseLayers.hydro);
-  L.control.scale({imperial:false,position:'bottomright'}).addTo(map);
-  state.rpgLayer=L.geoJSON(null,{style:parcelStyle,onEachFeature:onParcel}).addTo(map);
-  state.selectionLayer=L.geoJSON(null,{style:{color:'#e1000f',weight:4,fillColor:'#e1000f',fillOpacity:.12},interactive:false}).addTo(map);
+function esc(v){return String(v??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
+function prop(p,n){for(const k of n)if(p?.[k]!==undefined&&p[k]!==null&&p[k]!=="")return p[k];return null}
+function fam(p={}){const c=String(prop(p,["code_cultu","CODE_CULTU","code_culture","CODE_CULTURE"])||"").toUpperCase();
+ if(["BTH","BDH","ORH","ORP","AVH","AVP"].some(x=>c.includes(x)))return["Céréales","#d9b44a"];
+ if(["MIS","MIE","SOG"].some(x=>c.includes(x)))return["Maïs et sorgho","#edca2e"];
+ if(["PPH","PTR","PRA","SPH"].some(x=>c.includes(x)))return["Prairies","#6ba94b"];
+ if(["LUZ","LOT","TRE","FVL"].some(x=>c.includes(x)))return["Légumineuses","#3b9b72"];
+ if(["VRG","VRC","VRT","POT","CAR","OIG"].some(x=>c.includes(x)))return["Maraîchage","#1f8f5f"];
+ return["Autres cultures","#9a7b55"];}
+function parcelStyle(f){return{color:"#70571e",weight:1,fillColor:fam(f.properties)[1],fillOpacity:.72}}
+function status(t,sub,kind=""){ $("#status-text").textContent=t;$("#status-sub").textContent=sub;$("#status-dot").className="live-dot "+kind;}
+function progress(v){$("#progress").style.width=v+"%"}
+function openDrawer(){ $("#drawer").classList.add("open");$("#drawer").setAttribute("aria-hidden","false")}
+function card(t,b){return`<article class="block"><div class="block-title">${esc(t)}</div>${b}</article>`}
+function grid(rows){return`<div class="data-grid">${rows.map(([l,v])=>`<div class="data-row"><div class="l">${esc(l)}</div><div class="v">${v}</div></div>`).join("")}</div>`}
+function area(v){const n=Number(v);if(!Number.isFinite(n))return"Non renseignée";if(n<1000)return n.toLocaleString("fr-FR")+" m²";return(n/10000).toLocaleString("fr-FR",{maximumFractionDigits:2})+" ha"}
 
-  function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-  function showMessage(text,type='info',duration=3500){const el=$('#map-message');el.textContent=text;el.className='map-message show '+type;clearTimeout(showMessage.t);showMessage.t=setTimeout(()=>el.classList.remove('show'),duration);}
-  function setStatus(label,kind='online'){const el=$('#global-status');el.className='status-pill '+kind;el.innerHTML='<span class="status-dot"></span>'+escapeHtml(label);}
-  function cropInfo(props={}){const code=String(props.code_cultu||props.CODE_CULTU||props.code_culture||props.CODE_CULTURE||'').toUpperCase();return C.cropFamilies.find((f,i)=>i===C.cropFamilies.length-1||f.keys.some(k=>code.includes(k)))||C.cropFamilies.at(-1);}
-  function parcelStyle(feature){const fam=cropInfo(feature.properties);return{color:'#775b20',weight:1,fillColor:fam.color,fillOpacity:.68};}
-  function getProp(p,names){for(const n of names){if(p?.[n]!==undefined&&p[n]!==null&&p[n]!=='')return p[n]}return null}
-  function fmtArea(v){const n=Number(v);if(!Number.isFinite(n))return 'Non renseignée';return n>10000?(n/10000).toLocaleString('fr-FR',{maximumFractionDigits:2})+' ha':n.toLocaleString('fr-FR',{maximumFractionDigits:0})+' m²'}
-  function updateCounters(){ $('#parcel-count').textContent=state.rpgLayer.getLayers().length.toLocaleString('fr-FR');$('#active-layer-count').textContent=state.activeLayers.size; }
+async function loadCommunes(){
+ progress(25);status("Chargement","Communes du Val-d’Oise");
+ try{
+  const r=await fetch(C.communesApi);if(!r.ok)throw new Error("HTTP "+r.status);
+  state.communes=await r.json();
+  state.communesLayer=L.geoJSON(state.communes,{style:{color:"#000091",weight:1.4,fillColor:"#000091",fillOpacity:.025},
+   onEachFeature:(f,l)=>{l.bindTooltip(f.properties.nom,{sticky:true});l.on("click",e=>{L.DomEvent.stopPropagation(e);select(e.latlng,null,f.properties)})}}).addTo(map);
+  $("#kpi-communes").textContent=state.communes.features.length;
+  status("Données disponibles","Cliquez sur la carte","ok");progress(100);setTimeout(()=>progress(0),500)
+ }catch(e){console.error(e);status("Service territorial indisponible","Le clic RPG reste disponible","ko");progress(0)}
+}
+function geomPoint(ll){return encodeURIComponent(JSON.stringify({type:"Point",coordinates:[ll.lng,ll.lat]}))}
+async function parcelAt(ll){const r=await fetch(`${C.rpgApi}?geom=${geomPoint(ll)}`);if(!r.ok)throw new Error("RPG HTTP "+r.status);const d=await r.json();return d.features?.[0]||null}
+async function communeAt(ll){const r=await fetch(`${C.reverseApi}?lat=${ll.lat}&lon=${ll.lng}&fields=nom,code,codesPostaux,departement,region&format=json&geometry=centre`);if(!r.ok)throw new Error("Commune HTTP "+r.status);const d=await r.json();return d?.[0]||null}
 
-  function onParcel(feature,layer){const p=feature.properties||{};const fam=cropInfo(p);const culture=getProp(p,['lib_cultu','LIB_CULTU','libelle_culture','culture','code_cultu','CODE_CULTU'])||fam.label;layer.bindTooltip(escapeHtml(culture),{sticky:true,className:'parcel-tooltip'});layer.on('click',e=>{L.DomEvent.stopPropagation(e);selectParcel(feature,e.latlng);});}
+async function select(ll,knownParcel=null,knownCommune=null){
+ const id=++state.requestId;
+ if(state.marker)map.removeLayer(state.marker);
+ state.marker=L.circleMarker(ll,{radius:7,color:"#fff",weight:3,fillColor:"#e1000f",fillOpacity:1}).addTo(map);
+ state.selection.clearLayers();if(knownParcel)state.selection.addData(knownParcel);
+ openDrawer();$("#drawer-city").textContent="Point sélectionné";$("#drawer-sub").textContent=`${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`;
+ $("#summary-date").textContent=new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+ $("#summary-status").textContent="Analyse en cours";$("#summary-text").textContent="Interrogation du RPG et identification de la commune.";
+ $("#drawer-body").innerHTML='<div class="loading">Chargement des données officielles…</div>';
+ try{
+  const [parcel,commune]=await Promise.all([knownParcel?Promise.resolve(knownParcel):parcelAt(ll),knownCommune?Promise.resolve(knownCommune):communeAt(ll)]);
+  if(id!==state.requestId)return;
+  if(parcel&&!knownParcel){state.selection.clearLayers();state.selection.addData(parcel)}
+  render(ll,parcel,commune);
+ }catch(e){
+  console.error(e);if(id!==state.requestId)return;
+  $("#summary-status").textContent="Source indisponible";
+  $("#summary-text").textContent="La réponse n’a pas pu être obtenue. Aucune approximation n’est affichée.";
+  $("#drawer-body").innerHTML=card("Erreur de service",'<p>Une API officielle n’a pas répondu. Réessayez dans quelques instants.</p>');
+ }
+}
+function render(ll,parcel,commune){
+ const city=commune?.nom||"Commune non identifiée";$("#drawer-city").textContent=city;
+ $("#drawer-sub").textContent=commune?.code?`Code INSEE ${commune.code}`:`${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`;
+ let html="";
+ if(parcel){
+  const p=parcel.properties||{},f=fam(p);
+  const culture=prop(p,["lib_cultu","LIB_CULTU","libelle_culture","culture"])||f[0];
+  const code=prop(p,["code_cultu","CODE_CULTU","code_culture","CODE_CULTURE"])||"—";
+  const surf=prop(p,["surf_parc","SURF_PARC","surface","SURFACE","surf_ha"]);
+  const id=prop(p,["id_parcel","ID_PARCEL","id_parcelle","fid","id"])||"Non communiqué";
+  const year=prop(p,["annee","ANNEE","millesime","MILLÉSIME"])||"2024";
+  $("#summary-status").textContent=culture;$("#summary-text").textContent="Parcelle déclarée au Registre parcellaire graphique.";
+  html+=card("Parcelle agricole",grid([["Culture",esc(culture)],["Code RPG",esc(code)],["Famille",esc(f[0])],["Surface publiée",esc(area(surf))],["Millésime",esc(year)],["Identifiant",esc(id)]]));
+ }else{
+  $("#summary-status").textContent="Aucune parcelle RPG";$("#summary-text").textContent="Aucune parcelle déclarée à la PAC n’a été trouvée exactement à ce point.";
+  html+=card("Résultat RPG",'<p>Aucune parcelle agricole n’a été renvoyée à cette position. Cela ne prouve pas que le terrain n’est pas agricole.</p>');
+ }
+ html+=card("Territoire",grid([["Commune",esc(city)],["Code INSEE",esc(commune?.code||"Non identifié")],["Département",esc(commune?.departement?.nom||"Val-d’Oise")],["Coordonnées",`${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`]]));
+ html+=card("Sources",'<p>Registre parcellaire graphique — IGN, API Carto. Limites communales — API Géographique.</p><a class="source-link" target="_blank" rel="noopener noreferrer" href="https://www.data.gouv.fr/datasets/rpg">Consulter la fiche officielle ↗</a>');
+ $("#drawer-body").innerHTML=html;
+}
 
-  async function loadCommunes(){setStatus('Chargement des communes','');try{const r=await fetch(C.communesApi);if(!r.ok)throw new Error('HTTP '+r.status);state.communes=await r.json();state.communeLayer=L.geoJSON(state.communes,{style:{color:'#000091',weight:1.5,fillColor:'#000091',fillOpacity:.025},onEachFeature:(f,l)=>{l.bindTooltip(f.properties.nom,{sticky:true});l.on('click',e=>{L.DomEvent.stopPropagation(e);selectPoint(e.latlng,f.properties);});}}).addTo(map);$('#commune-count').textContent=state.communes.features.length;setStatus('Données territoriales disponibles','online');}catch(e){console.error(e);setStatus('Communes indisponibles','error');showMessage('Les limites communales n’ont pas pu être chargées. La carte reste utilisable.','error',6000);}}
-
-  function bboxPolygon(bounds){const w=bounds.getWest(),e=bounds.getEast(),s=bounds.getSouth(),n=bounds.getNorth();return {type:'Polygon',coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]};}
-  async function loadRpgInView(force=false){const z=map.getZoom();$('#zoom-hint').style.display=z<C.rpgMinZoom?'block':'none';if(!state.rpgEnabled||z<C.rpgMinZoom)return;const b=map.getBounds();const key=[z,b.getWest().toFixed(3),b.getSouth().toFixed(3),b.getEast().toFixed(3),b.getNorth().toFixed(3)].join('|');if(!force&&key===state.lastRpgKey)return;state.lastRpgKey=key;showMessage('Chargement des parcelles agricoles…','info',1500);try{const geom=encodeURIComponent(JSON.stringify(bboxPolygon(b)));const r=await fetch(`${C.rpgApi}?geom=${geom}`);if(!r.ok)throw new Error('HTTP '+r.status);const data=await r.json();state.rpgLayer.clearLayers();state.rpgLayer.addData(data);updateCounters();if(!data.features?.length)showMessage('Aucune parcelle RPG renvoyée dans cette vue.','info');}catch(e){console.error(e);showMessage('Le service RPG ne répond pas. Réessayez dans quelques instants.','error',5000);}}
-
-  function openDetails(){const p=$('#details-panel');p.classList.add('open');p.setAttribute('aria-hidden','false')}
-  function closeDetails(){const p=$('#details-panel');p.classList.remove('open');p.setAttribute('aria-hidden','true')}
-  function setMarker(latlng){if(state.marker)map.removeLayer(state.marker);state.marker=L.circleMarker(latlng,{radius:7,color:'#fff',weight:3,fillColor:'#e1000f',fillOpacity:1}).addTo(map)}
-  function switchTab(name){$$('[role=tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name)));$$('.tab-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===name));}
-  function card(title,body){return `<article class="info-card"><h3>${escapeHtml(title)}</h3>${body}</article>`}
-  function dl(rows){return `<dl class="definition-list">${rows.map(([a,b])=>`<dt>${escapeHtml(a)}</dt><dd>${b}</dd>`).join('')}</dl>`}
-
-  async function selectPoint(latlng,knownCommune=null){setMarker(latlng);state.selectionLayer.clearLayers();openDetails();switchTab('parcel');$('#details-title').textContent='Analyse du point sélectionné';$('#parcel-loading').classList.remove('hidden');$('#parcel-content').innerHTML='';$('#territory-content').innerHTML='';renderSources(latlng);const [parcel,commune]=await Promise.all([fetchParcelAtPoint(latlng),knownCommune?Promise.resolve(knownCommune):reverseCommune(latlng)]);$('#parcel-loading').classList.add('hidden');renderParcel(parcel,latlng);renderTerritory(commune,latlng);}
-  function selectParcel(feature,latlng){setMarker(latlng);state.selectionLayer.clearLayers();state.selectionLayer.addData(feature);openDetails();switchTab('parcel');$('#details-title').textContent='Parcelle agricole sélectionnée';renderParcel(feature,latlng);reverseCommune(latlng).then(c=>renderTerritory(c,latlng));renderSources(latlng);}
-
-  async function fetchParcelAtPoint(latlng){try{const geom=encodeURIComponent(JSON.stringify({type:'Point',coordinates:[latlng.lng,latlng.lat]}));const r=await fetch(`${C.rpgApi}?geom=${geom}`);if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();const f=d.features?.[0]||null;if(f){state.selectionLayer.clearLayers();state.selectionLayer.addData(f)}return f;}catch(e){console.error(e);return {error:true};}}
-  async function reverseCommune(latlng){try{const url=`${C.reverseCommuneApi}?lat=${latlng.lat}&lon=${latlng.lng}&fields=nom,code,codesPostaux,departement,region&format=json&geometry=centre`;const r=await fetch(url);if(!r.ok)throw new Error();const d=await r.json();return d?.[0]||null;}catch{return null}}
-
-  function renderParcel(feature,latlng){const el=$('#parcel-content');if(feature?.error){el.innerHTML='<div class="notice error">Le service du Registre parcellaire graphique est temporairement indisponible. Aucune donnée approximative n’est affichée.</div>';return}if(!feature){el.innerHTML='<div class="notice warning">Aucune parcelle agricole du RPG n’a été trouvée exactement à cette position. Le terrain peut être non déclaré à la PAC, non agricole ou hors du millésime disponible.</div>'+card('Position',dl([['Latitude',latlng.lat.toFixed(6)],['Longitude',latlng.lng.toFixed(6)]]));return}const p=feature.properties||{};const fam=cropInfo(p);const culture=getProp(p,['lib_cultu','LIB_CULTU','libelle_culture','culture'])||'Culture non libellée';const code=getProp(p,['code_cultu','CODE_CULTU','code_culture','CODE_CULTURE'])||'—';const surf=getProp(p,['surf_parc','SURF_PARC','surface','SURFACE','surf_ha']);const year=getProp(p,['annee','ANNEE','millesime','MILLÉSIME','MILLésime'])||'Selon le service RPG';const id=getProp(p,['id_parcel','ID_PARCEL','id_parcelle','ID_PARCELLE','fid','id'])||'Non communiqué';el.innerHTML=card('Culture déclarée',`<div class="data-grid"><div class="datum"><strong>${escapeHtml(culture)}</strong><span>Culture</span></div><div class="datum"><strong>${escapeHtml(code)}</strong><span>Code RPG</span></div><div class="datum"><strong>${escapeHtml(surf?fmtArea(surf):'Non renseignée')}</strong><span>Surface publiée</span></div><div class="datum"><strong>${escapeHtml(year)}</strong><span>Millésime</span></div></div>`)+card('Identification',dl([['Famille',escapeHtml(fam.label)],['Identifiant',escapeHtml(id)],['Latitude',latlng.lat.toFixed(6)],['Longitude',latlng.lng.toFixed(6)]]))+`<div class="notice">Le RPG recense les parcelles déclarées dans le cadre de la PAC. Il ne décrit pas nécessairement toutes les surfaces agricoles.</div>`;}
-  function renderTerritory(c,latlng){const el=$('#territory-content');if(!c){el.innerHTML='<div class="notice warning">La commune n’a pas pu être identifiée automatiquement.</div>'+card('Coordonnées',dl([['Latitude',latlng.lat.toFixed(6)],['Longitude',latlng.lng.toFixed(6)]]));return}const dep=c.departement?.nom||C.departmentName;el.innerHTML=card('Commune',`<div class="data-grid"><div class="datum"><strong>${escapeHtml(c.nom)}</strong><span>Commune</span></div><div class="datum"><strong>${escapeHtml(c.code)}</strong><span>Code INSEE</span></div></div>`)+card('Territoire',dl([['Département',escapeHtml(dep)],['Région',escapeHtml(c.region?.nom||'Île-de-France')],['Codes postaux',escapeHtml((c.codesPostaux||[]).join(', ')||'—')],['Coordonnées',`${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`]]));}
-
-  async function fetchBio(latlng,commune=null){const el=$('#bio-content');el.innerHTML='<div class="loading-block"><span class="spinner"></span>Recherche des opérateurs biologiques proches…</div>';try{const cp=commune?.codesPostaux?.[0];const params=new URLSearchParams({lat:latlng.lat,lon:latlng.lng,nb:8});if(cp)params.set('code_postal',cp);const r=await fetch(C.bioApi+'?'+params.toString());if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();const items=d.items||d.operateurs||d.results||d||[];if(!Array.isArray(items)||!items.length){el.innerHTML='<div class="notice warning">Aucun opérateur biologique n’a été renvoyé autour de cette position. Cela ne signifie pas nécessairement qu’il n’en existe aucun.</div>';return}el.innerHTML=items.slice(0,8).map(o=>{const name=o.denominationcourante||o.raisonSociale||o.nom||o.raison_sociale||'Opérateur biologique';const addr=[o.adresseOperateur?.lieu||o.adresse,o.adresseOperateur?.codePostal||o.codePostal,o.adresseOperateur?.ville||o.ville].filter(Boolean).join(' · ');const acts=(o.activites||o.activite||[]);return card(name,dl([['Adresse',escapeHtml(addr||'Non renseignée')],['Activité',escapeHtml(Array.isArray(acts)?acts.map(a=>a.nom||a).join(', '):acts||'Non renseignée')]]));}).join('');}catch(e){console.error(e);el.innerHTML='<div class="notice error">L’API de l’Agence Bio n’a pas répondu dans le navigateur. Consultez directement l’annuaire officiel depuis l’onglet Sources.</div>';}}
-  function renderSources(latlng){$('#source-content').innerHTML=card('Registre parcellaire graphique',`<p>Données géographiques officielles diffusées par l’IGN. Interrogation ponctuelle via API Carto.</p><a class="source-link" href="https://www.data.gouv.fr/datasets/rpg" target="_blank" rel="noopener noreferrer">Consulter la fiche officielle ↗</a>`)+card('Agriculture biologique',`<p>Opérateurs publics certifiés diffusés par l’Agence Bio.</p><a class="source-link" href="https://annuaire.agencebio.org/" target="_blank" rel="noopener noreferrer">Ouvrir l’annuaire officiel ↗</a>`)+card('Position interrogée',dl([['Latitude',latlng.lat.toFixed(6)],['Longitude',latlng.lng.toFixed(6)],['Date',new Date().toLocaleString('fr-FR')]]));}
-
-  function handleLayer(name,on){if(on)state.activeLayers.add(name);else state.activeLayers.delete(name);switch(name){case'rpg':state.rpgEnabled=on;if(on){state.rpgLayer.addTo(map);loadRpgInView(true)}else map.removeLayer(state.rpgLayer);break;case'communes':if(state.communeLayer){on?state.communeLayer.addTo(map):map.removeLayer(state.communeLayer)}break;case'orthophoto':if(on){map.removeLayer(osm);state.ortho.addTo(map)}else{map.removeLayer(state.ortho);osm.addTo(map)}break;}updateCounters()}
-  function searchCommunes(q){const box=$('#search-results');box.innerHTML='';if(!state.communes||q.trim().length<2)return;const norm=s=>s.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase();const hits=state.communes.features.filter(f=>norm(f.properties.nom).includes(norm(q))).slice(0,8);hits.forEach(f=>{const b=document.createElement('button');b.className='search-result';b.type='button';b.textContent=f.properties.nom;b.onclick=()=>{const l=L.geoJSON(f);map.fitBounds(l.getBounds(),{padding:[30,30],maxZoom:13});box.innerHTML='';$('#commune-search').value=f.properties.nom;if(innerWidth<980)$('#left-panel').classList.remove('open')};box.appendChild(b)});}
-
-  map.on('click',e=>selectPoint(e.latlng));map.on('moveend',()=>loadRpgInView());map.on('zoomend',()=>loadRpgInView());
-  $$('[data-layer]').forEach(i=>i.addEventListener('change',()=>handleLayer(i.dataset.layer,i.checked)));
-  $$('.details-tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
-  $('#close-details').onclick=closeDetails;$('#home-view').onclick=()=>map.fitBounds(C.bounds,{padding:[15,15]});$('#clear-selection').onclick=()=>{if(state.marker)map.removeLayer(state.marker);state.marker=null;state.selectionLayer.clearLayers();closeDetails()};
-  $('#locate-me').onclick=()=>map.locate({setView:true,maxZoom:15,enableHighAccuracy:true});map.on('locationfound',e=>selectPoint(e.latlng));map.on('locationerror',()=>showMessage('La géolocalisation n’est pas disponible ou a été refusée.','error'));
-  $('#toggle-menu').onclick=()=>$('#left-panel').classList.toggle('open');$('#open-about').onclick=()=>$('#about-dialog').showModal();
-  $('#collapse-layers').onclick=e=>{const c=$('#layers-content');const hidden=c.classList.toggle('hidden');e.currentTarget.querySelector('span:last-child').textContent=hidden?'＋':'−';e.currentTarget.setAttribute('aria-expanded',String(!hidden));setTimeout(()=>map.invalidateSize(),50)};
-  $('#commune-search').addEventListener('input',e=>searchCommunes(e.target.value));$('#search-button').onclick=()=>searchCommunes($('#commune-search').value);
-  map.fitBounds(C.bounds,{padding:[15,15]});
-  requestAnimationFrame(()=>map.invalidateSize(true));
-  window.addEventListener('load',()=>setTimeout(()=>map.invalidateSize(true),100));
-  window.addEventListener('resize',()=>map.invalidateSize());
-  new ResizeObserver(()=>map.invalidateSize()).observe(document.querySelector('.map-wrap'));
-  loadCommunes();updateCounters();
+function bbox(b){const w=b.getWest(),e=b.getEast(),s=b.getSouth(),n=b.getNorth();return{type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]}}
+async function loadVisibleRpg(){
+ const z=map.getZoom(),zl=$("#zoom-level");
+ zl.innerHTML=z<C.rpgMinZoom?"<strong>Vue départementale</strong><span>Cliquez pour interroger une position</span>":"<strong>Vue parcellaire</strong><span>Les cultures deviennent cliquables</span>";
+ if(!state.rpg||z<C.rpgMinZoom){state.rpgLayer.clearLayers();$("#kpi-parcelles").textContent="0";return}
+ const b=map.getBounds(),key=[z,b.getWest().toFixed(3),b.getSouth().toFixed(3),b.getEast().toFixed(3),b.getNorth().toFixed(3)].join("|");
+ if(key===state.lastKey)return;state.lastKey=key;
+ try{
+  const geom=encodeURIComponent(JSON.stringify(bbox(b))),r=await fetch(`${C.rpgApi}?geom=${geom}`);if(!r.ok)throw new Error("HTTP "+r.status);
+  const d=await r.json();state.rpgLayer.clearLayers();state.rpgLayer.addData(d);$("#kpi-parcelles").textContent=(d.features?.length||0).toLocaleString("fr-FR");
+ }catch(e){console.error(e);$("#kpi-parcelles").textContent="—"}
+}
+function search(q){
+ const box=$("#results");box.innerHTML="";if(!state.communes||q.trim().length<2)return;
+ const norm=s=>s.normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase();
+ state.communes.features.filter(f=>norm(f.properties.nom).includes(norm(q))).slice(0,8).forEach(f=>{
+  const b=document.createElement("button");b.textContent=f.properties.nom;b.onclick=()=>{map.fitBounds(L.geoJSON(f).getBounds(),{padding:[35,35],maxZoom:13});$("#search").value=f.properties.nom;box.innerHTML=""};box.appendChild(b)
+ })
+}
+map.on("click",e=>select(e.latlng));map.on("moveend",loadVisibleRpg);map.on("zoomend",loadVisibleRpg);
+$("#home").onclick=()=>map.fitBounds(C.bounds,{padding:[18,18]});
+$("#close").onclick=()=>{$("#drawer").classList.remove("open");$("#drawer").setAttribute("aria-hidden","true")};
+$("#search").oninput=e=>search(e.target.value);
+$("#search-btn").onclick=()=>search($("#search").value);
+$("#layers-btn").onclick=()=>$("#layers").classList.toggle("collapsed");
+$$(".layer-row").forEach(b=>b.onclick=()=>{
+ const name=b.dataset.layer,on=!b.classList.contains("active");b.classList.toggle("active",on);b.querySelector(".switch").textContent=on?"✓":"";
+ if(name==="rpg"){state.rpg=on;on?state.rpgLayer.addTo(map):map.removeLayer(state.rpgLayer);loadVisibleRpg()}
+ if(name==="communes"){state.communesOn=on;if(state.communesLayer)on?state.communesLayer.addTo(map):map.removeLayer(state.communesLayer)}
+ if(name==="ortho"){state.orthoOn=on;if(on){map.removeLayer(osm);ortho.addTo(map)}else{map.removeLayer(ortho);osm.addTo(map)}}
+});
+loadCommunes();setTimeout(()=>map.invalidateSize(),100);window.addEventListener("resize",()=>map.invalidateSize());
 })();
