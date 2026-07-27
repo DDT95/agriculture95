@@ -9,78 +9,47 @@
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://tile.openstreetmap.org">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynhW9r+5jMZrfK1vU6Xzq4N08xgE=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <a class="skip-link" href="#map">Aller directement à la carte</a>
 
   <header class="site-header">
-    <div class="rf-brand" aria-label="République française — Préfecture du Val-d'Oise">
-      <div class="rf-flag" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div class="rf-text"><strong>RÉPUBLIQUE<br>FRANÇAISE</strong><small>Liberté · Égalité · Fraternité</small></div>
-    </div>
+    <img class="prefet-logo" src="assets/logos-prefet.svg" alt="Préfet du Val-d’Oise — Liberté, Égalité, Fraternité">
     <div class="header-title">
       <p class="eyebrow">Direction départementale des territoires du Val-d’Oise</p>
       <h1>Agriculture 95</h1>
-      <p>Explorer les parcelles agricoles, les cultures et les enjeux territoriaux du Val-d’Oise.</p>
+      <p>Parcelles agricoles et cultures du Val-d’Oise</p>
     </div>
     <div class="header-meta">
       <span class="status-pill" id="global-status"><span class="status-dot"></span>Initialisation</span>
-      <span class="update-date">Version 1.0 · 27 juillet 2026</span>
     </div>
   </header>
 
   <main class="app-shell">
-    <aside class="left-panel" id="left-panel" aria-label="Outils et légende">
-      <section class="intro-card">
-        <h2>Le territoire agricole en un clic</h2>
-        <p>Cliquez sur une parcelle pour connaître sa culture déclarée, sa surface, son millésime et les informations territoriales disponibles.</p>
-        <div class="key-figures" aria-label="État des données chargées">
-          <div><strong id="commune-count">—</strong><span>communes</span></div>
-          <div><strong id="parcel-count">0</strong><span>parcelles affichées</span></div>
-          <div><strong id="active-layer-count">2</strong><span>couches actives</span></div>
-        </div>
-      </section>
-
-      <section class="search-card">
+    <aside class="left-panel" id="left-panel" aria-label="Recherche et couches">
+      <section class="search-card compact-card">
         <label for="commune-search">Rechercher une commune</label>
         <div class="search-row">
           <input id="commune-search" type="search" autocomplete="off" placeholder="Ex. Magny-en-Vexin">
-          <button id="search-button" type="button" title="Rechercher">Rechercher</button>
+          <button id="search-button" type="button" aria-label="Rechercher">Rechercher</button>
         </div>
         <div id="search-results" class="search-results" role="listbox" aria-label="Résultats de recherche"></div>
       </section>
 
-      <section class="layers-card">
-        <div class="section-heading">
-          <h2>Légende et couches</h2>
-          <button id="collapse-layers" class="icon-button" type="button" aria-expanded="true" aria-controls="layers-content">−</button>
-        </div>
-        <div id="layers-content">
-          <div class="layer-group">
-            <h3>Agriculture</h3>
-            <label class="layer-row"><input type="checkbox" data-layer="rpg" checked><span class="swatch swatch-rpg"></span><span><strong>Parcelles agricoles (RPG)</strong><small>Chargées autour de la zone visible</small></span></label>
-            <label class="layer-row"><input type="checkbox" data-layer="communes" checked><span class="swatch swatch-communes"></span><span><strong>Communes</strong><small>Limites administratives du Val-d’Oise</small></span></label>
-            <label class="layer-row"><input type="checkbox" data-layer="bio"><span class="swatch swatch-bio"></span><span><strong>Opérateurs biologiques</strong><small>Recherche autour du point sélectionné</small></span></label>
-          </div>
-          <div class="layer-group">
-            <h3>Contexte</h3>
-            <label class="layer-row"><input type="checkbox" data-layer="water"><span class="swatch swatch-water"></span><span><strong>Hydrographie</strong><small>Fond contextuel IGN lorsque disponible</small></span></label>
-            <label class="layer-row"><input type="checkbox" data-layer="orthophoto"><span class="swatch swatch-photo"></span><span><strong>Photographies aériennes</strong><small>Fond IGN — peut être plus lent</small></span></label>
-          </div>
-          <div class="legend-crops">
-            <h3>Familles de cultures</h3>
-            <div class="crop-grid" id="crop-legend"></div>
-          </div>
+      <section class="layers-card compact-card">
+        <button id="collapse-layers" class="layers-toggle" type="button" aria-expanded="false" aria-controls="layers-content">
+          <span>Couches de la carte</span><span aria-hidden="true">＋</span>
+        </button>
+        <div id="layers-content" class="hidden">
+          <label class="layer-row"><input type="checkbox" data-layer="rpg" checked><span class="swatch swatch-rpg"></span><span><strong>Parcelles agricoles</strong><small>Registre parcellaire graphique</small></span></label>
+          <label class="layer-row"><input type="checkbox" data-layer="communes" checked><span class="swatch swatch-communes"></span><span><strong>Limites communales</strong></span></label>
+          <label class="layer-row"><input type="checkbox" data-layer="orthophoto"><span class="swatch swatch-photo"></span><span><strong>Photographie aérienne</strong></span></label>
+          <button id="open-about" class="about-link" type="button">Sources et limites</button>
         </div>
       </section>
-
-      <section class="sources-card">
-        <h2>Sources principales</h2>
-        <p>IGN · RPG, API Carto et limites administratives<br>Agence Bio · opérateurs certifiés<br>OpenStreetMap · fond cartographique</p>
-        <button id="open-about" class="text-button" type="button">Méthode, sources et limites</button>
-      </section>
+      <p class="click-help">Zoomez puis cliquez sur une parcelle pour afficher ses informations.</p>
     </aside>
 
     <section class="map-wrap" aria-label="Carte interactive de l'agriculture du Val-d'Oise">
@@ -103,7 +72,6 @@
       <div class="details-tabs" role="tablist">
         <button role="tab" aria-selected="true" data-tab="parcel">Parcelle</button>
         <button role="tab" aria-selected="false" data-tab="territory">Territoire</button>
-        <button role="tab" aria-selected="false" data-tab="bio">Bio</button>
         <button role="tab" aria-selected="false" data-tab="sources">Sources</button>
       </div>
       <div class="details-content">
@@ -112,7 +80,6 @@
           <div id="parcel-content" class="info-stack"></div>
         </section>
         <section class="tab-panel" data-panel="territory"><div id="territory-content" class="info-stack"></div></section>
-        <section class="tab-panel" data-panel="bio"><div id="bio-content" class="info-stack"></div></section>
         <section class="tab-panel" data-panel="sources"><div id="source-content" class="info-stack"></div></section>
       </div>
     </aside>
