@@ -69,6 +69,7 @@ export default function Home() {
   const activeRef = useRef<string[]>(["rpg"]);
   const selectionRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const selectionGenerationRef = useRef(0);
   const [active, setActive] = useState(["rpg"]);
   const [drawer, setDrawer] = useState(false);
   const [layersOpen, setLayersOpen] = useState(true);
@@ -207,13 +208,13 @@ export default function Home() {
     }catch{setStatus(s=>({...s,commune:"error"}));}
   }
 
-  async function resolveCadastre(lon:number,lat:number){
+  async function resolveCadastre(lon:number,lat:number,generation=selectionGenerationRef.current){
     setCadastre(null);
     try{
       const geom=encodeURIComponent(JSON.stringify({type:"Point",coordinates:[lon,lat]}));
       const r=await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?geom=${geom}`);
       if(!r.ok)throw new Error();
-      const d=await r.json(),feature=d.features?.[0];if(!feature)return;
+      const d=await r.json(),feature=d.features?.[0];if(generation!==selectionGenerationRef.current||!feature)return;
       const p=feature.properties||{};
       const item:Cadastre={section:String(p.section||"—"),numero:String(p.numero||"—"),idu:String(p.idu||"Non publié"),contenance:Number(p.contenance||0),gid:String(p.gid||"Non publié"),feature};
       setCadastre(item);
@@ -225,11 +226,12 @@ export default function Home() {
   }
 
   async function inspectPoint(lon:number,lat:number){
+    const generation=++selectionGenerationRef.current;
     const map=mapRef.current,L=window.L; setCoordinates([lon,lat]);setDrawer(true);setFarm(null);setParcel(null);setCadastre(null);
     if(markerRef.current) map.removeLayer(markerRef.current);
     markerRef.current=L.circleMarker([lat,lon],{radius:7,color:"#000091",weight:3,fillColor:"#fff",fillOpacity:1}).addTo(map);
     resolveCommune(lon,lat);
-    resolveCadastre(lon,lat);
+    resolveCadastre(lon,lat,generation);
     setStatus(s=>({...s,rpg:"loading"}));
     try{
       const geom=encodeURIComponent(JSON.stringify({type:"Point",coordinates:[lon,lat]}));
@@ -239,6 +241,7 @@ export default function Home() {
         if(!r.ok) throw new Error(String(r.status));
         const data=await r.json();return {year,feature:data.features?.[0]};
       }));
+      if(generation!==selectionGenerationRef.current)return;
       const unavailable:number[]=[],history:ParcelHistory[]=[];
       responses.forEach((result,index)=>{
         const year=years[index];
@@ -253,7 +256,7 @@ export default function Home() {
       if(selectionRef.current) map.removeLayer(selectionRef.current);
       selectionRef.current=L.geoJSON(current.feature,{style:{color:"#000091",weight:4,fillColor:"#fff",fillOpacity:.18}}).addTo(map);
       setStatus(s=>({...s,rpg:"ok"}));
-    }catch{setStatus(s=>({...s,rpg:"error"}));}
+    }catch{if(generation===selectionGenerationRef.current)setStatus(s=>({...s,rpg:"error"}));}
   }
 
   function selectBio(feature:any,latlng:any){
@@ -273,7 +276,26 @@ export default function Home() {
   }
 
   function reset(){
-    mapRef.current?.setView([49.075,2.105],10);setDrawer(false);
+    mapRef.current?.setView([49.075,2.105],10);clearSelection();
+  }
+
+  function clearSelection(){
+    selectionGenerationRef.current+=1;
+    const map=mapRef.current;
+    if(map&&selectionRef.current)map.removeLayer(selectionRef.current);
+    if(map&&markerRef.current)map.removeLayer(markerRef.current);
+    if(map&&layerRef.current.cadastre&&map.hasLayer(layerRef.current.cadastre))map.removeLayer(layerRef.current.cadastre);
+    selectionRef.current=null;
+    markerRef.current=null;
+    layerRef.current.cadastre=null;
+    setDrawer(false);
+    setQuery("");
+    setCommune(null);
+    setCadastre(null);
+    setParcel(null);
+    setFarm(null);
+    setCoordinates(null);
+    setStatus(s=>({...s,commune:"idle",rpg:"idle"}));
   }
 
   async function exportParcelPdf(){
@@ -329,7 +351,7 @@ export default function Home() {
       </section>
 
       {drawer&&<aside className="drawer">
-        <button className="close" onClick={()=>setDrawer(false)} aria-label="Fermer">×</button>
+        <button className="close" onClick={clearSelection} aria-label="Fermer et effacer la sélection">×</button>
         <div className="drawer-head"><small>POINT OBSERVÉ</small><h2>{commune?.name||farm?.name||"Analyse en cours"}</h2>{coordinates&&<p>{coordinates[1].toFixed(5)} · {coordinates[0].toFixed(5)}</p>}{parcel&&<button className="drawer-primary" onClick={exportParcelPdf}>Ouvrir la fiche de la parcelle ↗</button>}</div>
         <div className="drawer-body">
           <div className="drawer-section-title">INFORMATIONS DU POINT CLIQUÉ</div>
