@@ -174,6 +174,20 @@ export default function Home() {
     });
   },[basemap]);
 
+  useEffect(()=>{
+    const map=mapRef.current;
+    if(!map)return;
+    const timer=window.setTimeout(()=>{
+      map.invalidateSize();
+      if(drawer&&map.getZoom()<=10&&territoryBoundsRef.current){
+        map.fitBounds(territoryBoundsRef.current,{padding:[24,24],animate:false});
+      }else if(drawer&&coordinates){
+        map.panInside([coordinates[1],coordinates[0]],{paddingTopLeft:[30,30],paddingBottomRight:[30,30],animate:true});
+      }
+    },40);
+    return()=>window.clearTimeout(timer);
+  },[drawer]);
+
   function toggleLayer(id:string){
     const enabling=!activeRef.current.includes(id);
     if(id==="cadastre"&&enabling&&mapRef.current?.getZoom()<14)mapRef.current.setZoom(14);
@@ -358,7 +372,7 @@ export default function Home() {
       <div className="header-status"><i/><p><strong>{farmCount?`${farmCount.toLocaleString("fr-FR")} exploitations agricoles`:"Chargement des exploitations"}</strong><small>SIRENE · établissements actifs géolocalisés</small></p></div>
     </header>
 
-    <div className="workspace">
+    <div className={`workspace ${drawer?"details-open":""}`}>
       <aside className="left-panel">
         <h1>Rechercher et comprendre<br/><span>l’agriculture</span></h1>
         <form onSubmit={search} className="search"><div><input aria-label="Rechercher une commune" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Adresse ou commune…"/><button aria-label="Rechercher">Rechercher</button></div></form>
