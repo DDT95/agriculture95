@@ -66,6 +66,7 @@ export default function Home() {
   const mapRef = useRef<any>(null);
   const layerRef = useRef<Record<string,any>>({});
   const baseRef = useRef<Record<string,any>>({});
+  const territoryBoundsRef = useRef<any>(null);
   const activeRef = useRef<string[]>(["rpg"]);
   const selectionRef = useRef<any>(null);
   const cadastreSelectionRef = useRef<any>(null);
@@ -91,7 +92,7 @@ export default function Home() {
     const boot = () => {
       if (!window.L || !mapEl.current || mapRef.current) return;
       const L = window.L;
-      const map = L.map(mapEl.current, { zoomControl:false, attributionControl:true, minZoom:9, maxZoom:19, maxBoundsViscosity:1 }).setView([49.075,2.105],10);
+      const map = L.map(mapEl.current, { zoomControl:false, attributionControl:true, minZoom:6, maxZoom:19 }).setView([49.075,2.105],10);
       mapRef.current = map;
       L.control.zoom({position:"bottomright"}).addTo(map);
       const base = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -132,7 +133,11 @@ export default function Home() {
             style:{stroke:false,fillColor:"#eef1f5",fillOpacity:.88,fillRule:"evenodd"}
           }).addTo(map);
           const territory=L.geoJSON(data,{style:{color:"#6a6a6a",weight:.7,opacity:.65,fillOpacity:0},interactive:false}).addTo(map);
-          const b=territory.getBounds(); if(b.isValid()){map.fitBounds(b,{padding:[38,38]}); map.setMaxBounds(b.pad(.08));}
+          const b=territory.getBounds();
+          if(b.isValid()){
+            territoryBoundsRef.current=b;
+            requestAnimationFrame(()=>{map.invalidateSize();map.fitBounds(b,{padding:[24,24],animate:false});});
+          }
         }).catch(()=>undefined);
       map.on("zoomend",()=>setZoom(map.getZoom()));
       map.on("click",(e:any)=>inspectPoint(e.latlng.lng,e.latlng.lat));
@@ -292,7 +297,10 @@ export default function Home() {
   }
 
   function reset(){
-    mapRef.current?.setView([49.075,2.105],10);clearSelection();
+    const map=mapRef.current,bounds=territoryBoundsRef.current;
+    clearSelection();
+    if(map&&bounds){map.invalidateSize();map.fitBounds(bounds,{padding:[24,24],animate:true});}
+    else map?.setView([49.075,2.105],9);
   }
 
   function clearSelection(){
