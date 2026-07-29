@@ -12,14 +12,14 @@ type Commune = { name: string; code: string };
 type Cadastre = { section:string; numero:string; idu:string; contenance:number; gid:string; feature:any };
 
 const layers = [
-  { id: "rpg", label: "Parcelles agricoles", detail: "RPG 2024 · ASP / IGN", color: "#dcae3e" },
+  { id: "rpg", label: "Parcelles agricoles", detail: "RPG 2024 · couleurs par culture", color: "linear-gradient(135deg,#f2ea73 0 25%,#55e96a 25% 50%,#d9aa48 50% 75%,#4d9698 75%)" },
   { id: "bio", label: "Parcelles biologiques", detail: "CartoBio · Agence Bio", color: "#18753c" },
   { id: "farms", label: "Fermes et exploitations", detail: "SIRENE · 1 133 établissements actifs", color: "#18753c" },
   { id: "coops", label: "Coopératives agricoles", detail: "SIRENE · établissements géolocalisés", color: "#6a4c93" },
   { id: "equipment", label: "Matériel agricole", detail: "SIRENE · commerce de gros · 46.61Z", color: "#c65d21" },
-  { id: "hedges", label: "Haies et bocage", detail: "BD Haie · IGN", color: "#455b34" },
+  { id: "hedges", label: "Haies et bocage", detail: "BD Haie · IGN", color: "#2f6b3c" },
   { id: "water", label: "Cours d’eau", detail: "Géoportail · IGN", color: "#0078f3" },
-  { id: "cadastre", label: "Parcelle cadastrale du clic", detail: "Cadastre · API Carto IGN", color: "#7a4d2a" },
+  { id: "cadastre", label: "Parcelles cadastrales", detail: "Parcellaire Express · visible dès le zoom 14", color: "#6f00d9" },
 ];
 
 const cropNames: Record<string,string> = {
@@ -68,6 +68,7 @@ export default function Home() {
   const baseRef = useRef<Record<string,any>>({});
   const activeRef = useRef<string[]>(["rpg"]);
   const selectionRef = useRef<any>(null);
+  const cadastreSelectionRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const selectionGenerationRef = useRef(0);
   const [active, setActive] = useState(["rpg"]);
@@ -90,7 +91,7 @@ export default function Home() {
     const boot = () => {
       if (!window.L || !mapEl.current || mapRef.current) return;
       const L = window.L;
-      const map = L.map(mapEl.current, { zoomControl:false, attributionControl:true }).setView([49.075,2.105],10);
+      const map = L.map(mapEl.current, { zoomControl:false, attributionControl:true, minZoom:9, maxZoom:19, maxBoundsViscosity:1 }).setView([49.075,2.105],10);
       mapRef.current = map;
       L.control.zoom({position:"bottomright"}).addTo(map);
       const base = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -101,8 +102,9 @@ export default function Home() {
       base.getContainer()?.classList.add("neutral-tiles");
 
       layerRef.current.rpg = L.tileLayer(wmts("LANDUSE.AGRICULTURE2024"), { opacity:.72, maxZoom:19, zIndex:350, attribution:"RPG 2024 · IGN / ASP" }).addTo(map);
-      layerRef.current.hedges = L.tileLayer(wmts("IGNF_BD-HAIE-V1_2020"), { opacity:.88, maxZoom:19, zIndex:400, attribution:"BD Haie · IGN" });
+      layerRef.current.hedges = L.tileLayer(wmts("IGNF_BD-HAIE-V1_2020"), { className:"hedge-tiles", opacity:.9, maxZoom:19, zIndex:400, attribution:"BD Haie · IGN" });
       layerRef.current.water = L.tileLayer(wmts("HYDROGRAPHY.HYDROGRAPHY"), { opacity:.72, maxZoom:19, zIndex:400, attribution:"Hydrographie · IGN" });
+      layerRef.current.cadastre = L.tileLayer(wmts("CADASTRALPARCELS.PARCELLAIRE_EXPRESS"), { opacity:.78, minZoom:14, maxZoom:19, zIndex:430, attribution:"Parcellaire Express · IGN" });
 
       fetch("data/cartobio-val-doise.geojson").then(r=>r.json()).then(data=>{
         layerRef.current.bio = L.geoJSON(data, {
@@ -112,6 +114,7 @@ export default function Home() {
             selectBio(feature,e.latlng);
           })
         });
+        if(activeRef.current.includes("bio"))layerRef.current.bio.addTo(map);
       }).catch(()=>undefined);
 
       fetch("https://geo.api.gouv.fr/departements/95/communes?fields=nom,code,contour&format=geojson&geometry=contour")
@@ -129,7 +132,7 @@ export default function Home() {
             style:{stroke:false,fillColor:"#eef1f5",fillOpacity:.88,fillRule:"evenodd"}
           }).addTo(map);
           const territory=L.geoJSON(data,{style:{color:"#6a6a6a",weight:.7,opacity:.65,fillOpacity:0},interactive:false}).addTo(map);
-          const b=territory.getBounds(); if(b.isValid()){map.fitBounds(b,{padding:[28,28]}); map.setMaxBounds(b.pad(.45));}
+          const b=territory.getBounds(); if(b.isValid()){map.fitBounds(b,{padding:[38,38]}); map.setMaxBounds(b.pad(.08));}
         }).catch(()=>undefined);
       map.on("zoomend",()=>setZoom(map.getZoom()));
       map.on("click",(e:any)=>inspectPoint(e.latlng.lng,e.latlng.lat));
@@ -152,6 +155,10 @@ export default function Home() {
       if(show&&!map.hasLayer(layer)) layer.addTo(map);
       if(!show&&map.hasLayer(layer)) map.removeLayer(layer);
     }
+    if(cadastreSelectionRef.current){
+      if(active.includes("cadastre")&&!map.hasLayer(cadastreSelectionRef.current))cadastreSelectionRef.current.addTo(map);
+      if(!active.includes("cadastre")&&map.hasLayer(cadastreSelectionRef.current))map.removeLayer(cadastreSelectionRef.current);
+    }
   },[active]);
 
   useEffect(()=>{
@@ -161,6 +168,12 @@ export default function Home() {
       if(id!==basemap&&map.hasLayer(layer))map.removeLayer(layer);
     });
   },[basemap]);
+
+  function toggleLayer(id:string){
+    const enabling=!activeRef.current.includes(id);
+    if(id==="cadastre"&&enabling&&mapRef.current?.getZoom()<14)mapRef.current.setZoom(14);
+    setActive(current=>current.includes(id)?current.filter(value=>value!==id):[...current,id]);
+  }
 
   async function loadFarms(map:any){
     setStatus(s=>({...s,farms:"loading"}));
@@ -173,10 +186,10 @@ export default function Home() {
         const [lon,lat]=feature.geometry.coordinates,p=feature.properties||{};
         const f:Farm={name:p.nom||"Exploitation agricole",activity:p.activite||"Activité non renseignée",source:p.source||"SIRENE",lat,lon,siret:p.siret,commune:p.commune,address:p.adresse,bio:Boolean(p.bio),created:p.date_creation};
         const icon=L.divIcon({className:"agri-map-icon",html:`<span class="${f.bio?"bio":""}" aria-hidden="true">🚜</span>`,iconSize:[27,27],iconAnchor:[13,13]});
-        L.marker([lat,lon],{icon}).bindTooltip(f.name,{direction:"top",offset:[0,-13]}).on("click",(e:any)=>{L.DomEvent.stopPropagation(e);setFarm(f);setParcel(null);setCoordinates([lon,lat]);setDrawer(true);setCommune(f.commune?{name:f.commune,code:""}:null);if(!f.commune)resolveCommune(lon,lat);else setStatus(s=>({...s,commune:"ok"}));}).addTo(group);
+        L.marker([lat,lon],{icon}).bindTooltip(f.name,{direction:"top",offset:[0,-13]}).on("click",(e:any)=>{L.DomEvent.stopPropagation(e);clearMapSelection();setFarm(f);setParcel(null);setCoordinates([lon,lat]);setDrawer(true);setCommune(f.commune?{name:f.commune,code:""}:null);if(!f.commune)resolveCommune(lon,lat);else setStatus(s=>({...s,commune:"ok"}));}).addTo(group);
       });
       setFarmCount(data.features.length);
-      layerRef.current.farms=group; if(active.includes("farms")) group.addTo(map);
+      layerRef.current.farms=group; if(activeRef.current.includes("farms")) group.addTo(map);
       setStatus(s=>({...s,farms:data.features.length?"ok":"empty"}));
     }catch{setStatus(s=>({...s,farms:"error"}));}
   }
@@ -187,14 +200,14 @@ export default function Home() {
       data.features?.forEach((feature:any)=>{
         const [lon,lat]=feature.geometry.coordinates,p=feature.properties||{};
         const f:Farm={name:p.nom||category,activity:p.activite||"Non renseignée",source:p.source||"SIRENE",lat,lon,siret:p.siret,commune:p.commune,address:p.adresse,created:p.date_creation,category:p.categorie||category};
-        const icon=L.divIcon({className:"agri-map-icon service",html:`<span aria-hidden="true">${glyph}</span>`,iconSize:[27,27],iconAnchor:[13,13]});
+        const icon=L.divIcon({className:`agri-map-icon service ${id}`,html:`<span aria-hidden="true">${glyph}</span>`,iconSize:[27,27],iconAnchor:[13,13]});
         L.marker([lat,lon],{icon}).bindTooltip(f.name,{direction:"top",offset:[0,-13]}).on("click",(e:any)=>{
-          L.DomEvent.stopPropagation(e);setFarm(f);setParcel(null);setCoordinates([lon,lat]);setDrawer(true);
+          L.DomEvent.stopPropagation(e);clearMapSelection();setFarm(f);setParcel(null);setCoordinates([lon,lat]);setDrawer(true);
           setCommune(f.commune?{name:f.commune,code:""}:null);
           if(!f.commune)resolveCommune(lon,lat);else setStatus(s=>({...s,commune:"ok"}));
         }).addTo(group);
       });
-      layerRef.current[id]=group;if(active.includes(id))group.addTo(map);
+      layerRef.current[id]=group;if(activeRef.current.includes(id))group.addTo(map);
     }catch{}
   }
 
@@ -219,14 +232,15 @@ export default function Home() {
       const item:Cadastre={section:String(p.section||"—"),numero:String(p.numero||"—"),idu:String(p.idu||"Non publié"),contenance:Number(p.contenance||0),gid:String(p.gid||"Non publié"),feature};
       setCadastre(item);
       const L=window.L;
-      if(layerRef.current.cadastre&&mapRef.current?.hasLayer(layerRef.current.cadastre))mapRef.current.removeLayer(layerRef.current.cadastre);
-      layerRef.current.cadastre=L.geoJSON(feature,{style:{color:"#7a4d2a",weight:3,dashArray:"7 4",fillColor:"#fff",fillOpacity:.08},interactive:false});
-      if(activeRef.current.includes("cadastre"))layerRef.current.cadastre.addTo(mapRef.current);
+      if(cadastreSelectionRef.current&&mapRef.current?.hasLayer(cadastreSelectionRef.current))mapRef.current.removeLayer(cadastreSelectionRef.current);
+      cadastreSelectionRef.current=L.geoJSON(feature,{style:{color:"#4f0099",weight:4,fillColor:"#c9a7ff",fillOpacity:.16},interactive:false});
+      if(activeRef.current.includes("cadastre"))cadastreSelectionRef.current.addTo(mapRef.current);
     }catch{}
   }
 
   async function inspectPoint(lon:number,lat:number){
-    const generation=++selectionGenerationRef.current;
+    clearMapSelection();
+    const generation=selectionGenerationRef.current;
     const map=mapRef.current,L=window.L; setCoordinates([lon,lat]);setDrawer(true);setFarm(null);setParcel(null);setCadastre(null);
     if(markerRef.current) map.removeLayer(markerRef.current);
     markerRef.current=L.circleMarker([lat,lon],{radius:7,color:"#000091",weight:3,fillColor:"#fff",fillOpacity:1}).addTo(map);
@@ -260,9 +274,11 @@ export default function Home() {
   }
 
   function selectBio(feature:any,latlng:any){
-    const p=feature.properties||{}; setDrawer(true);setFarm(null);setCoordinates([latlng.lng,latlng.lat]);
+    clearMapSelection();
+    const p=feature.properties||{},L=window.L,map=mapRef.current; setDrawer(true);setFarm(null);setCoordinates([latlng.lng,latlng.lat]);
     const current={year:Number(p.annee||2024),code:p.code_culture||"BIO",label:p.culture_nom||"Culture biologique",group:p.groupe_culture||"Non renseigné",surface:Number(p.surface_ha||0),id:String(p.id||feature.id||"Non publié"),feature};
     setParcel({...current,history:[current],historyUnavailable:[]});
+    if(L&&map)selectionRef.current=L.geoJSON(feature,{style:{color:"#0f5b2d",weight:4,fillColor:"#8bd3a0",fillOpacity:.22},interactive:false}).addTo(map);
     setStatus(s=>({...s,rpg:"ok"}));resolveCommune(latlng.lng,latlng.lat);
   }
 
@@ -280,22 +296,26 @@ export default function Home() {
   }
 
   function clearSelection(){
-    selectionGenerationRef.current+=1;
-    const map=mapRef.current;
-    if(map&&selectionRef.current)map.removeLayer(selectionRef.current);
-    if(map&&markerRef.current)map.removeLayer(markerRef.current);
-    if(map&&layerRef.current.cadastre&&map.hasLayer(layerRef.current.cadastre))map.removeLayer(layerRef.current.cadastre);
-    selectionRef.current=null;
-    markerRef.current=null;
-    layerRef.current.cadastre=null;
+    clearMapSelection();
     setDrawer(false);
     setQuery("");
     setCommune(null);
-    setCadastre(null);
     setParcel(null);
     setFarm(null);
     setCoordinates(null);
     setStatus(s=>({...s,commune:"idle",rpg:"idle"}));
+  }
+
+  function clearMapSelection(){
+    selectionGenerationRef.current+=1;
+    const map=mapRef.current;
+    if(map&&selectionRef.current)map.removeLayer(selectionRef.current);
+    if(map&&markerRef.current)map.removeLayer(markerRef.current);
+    if(map&&cadastreSelectionRef.current&&map.hasLayer(cadastreSelectionRef.current))map.removeLayer(cadastreSelectionRef.current);
+    selectionRef.current=null;
+    markerRef.current=null;
+    cadastreSelectionRef.current=null;
+    setCadastre(null);
   }
 
   async function exportParcelPdf(){
@@ -339,14 +359,14 @@ export default function Home() {
         <nav className="view-switch" aria-label="Mode d’affichage"><button className={view==="map"?"active":""} onClick={()=>setView("map")}>Carte</button><button className={view==="data"?"active":""} onClick={()=>setView("data")}>Données & évolutions</button></nav>
         <section className="purpose"><h3>À quoi sert cet outil ?</h3><p>Localiser les exploitations agricoles, identifier les cultures déclarées et croiser les données utiles à la connaissance du territoire.</p></section>
         {view==="map"&&<><button className="layers-title" onClick={()=>setLayersOpen(!layersOpen)}><span>Couches de la carte</span><b>{active.length} actives {layersOpen?"−":"+"}</b></button>
-        {layersOpen&&<div className="layer-list">{layers.map(l=><label key={l.id} className="layer-row"><input type="checkbox" checked={active.includes(l.id)} onChange={()=>setActive(a=>a.includes(l.id)?a.filter(x=>x!==l.id):[...a,l.id])}/><i style={{background:l.color}}/><span><strong>{l.label}</strong><small>{l.detail}</small></span></label>)}</div>}</>}
+        {layersOpen&&<div className="layer-list">{layers.map(l=><label key={l.id} className="layer-row"><input type="checkbox" checked={active.includes(l.id)} onChange={()=>toggleLayer(l.id)}/><i style={{background:l.color}}/><span><strong>{l.label}</strong><small>{l.detail}</small></span></label>)}</div>}</>}
         {view==="map"&&<div className="basemap-choice"><strong>Fond de carte</strong><div><button className={basemap==="plan"?"active":""} onClick={()=>setBasemap("plan")}>Plan neutre</button><button className={basemap==="ortho"?"active":""} onClick={()=>setBasemap("ortho")}>Photo aérienne</button></div></div>}
         {view==="data"&&<div className="data-menu"><strong>Tableau de bord départemental</strong><small>2010–2024 · données agricoles ouvertes</small><p>Surfaces, productions, agriculture biologique et comparaison des communes.</p></div>}
       </aside>
 
       <section className="map-zone">
         <div ref={mapEl} className={`map ${view==="data"?"map-hidden":""}`} aria-label="Carte agricole interactive du Val-d’Oise"/>
-        {view==="map"&&<div className="legend"><b>Légende</b>{active.includes("rpg")&&<span><i className="lg-rpg"/>Cultures RPG</span>}{active.includes("bio")&&<span><i className="lg-bio"/>Parcelles bio</span>}{active.includes("farms")&&<span><i className="lg-farm"/>Exploitations</span>}{active.includes("coops")&&<span><i className="lg-coop"/>Coopératives</span>}{active.includes("equipment")&&<span><i className="lg-equipment"/>Matériel agricole</span>}{active.includes("hedges")&&<span><i className="lg-hedge"/>Haies</span>}{active.includes("water")&&<span><i className="lg-water"/>Cours d’eau</span>}{active.includes("cadastre")&&<span><i className="lg-cadastre"/>{cadastre?"Cadastre sélectionné":"Cadastre au clic"}</span>}</div>}
+        {view==="map"&&<div className="legend"><b>Légende</b>{active.includes("rpg")&&<span><i className="lg-rpg"/>Cultures RPG</span>}{active.includes("bio")&&<span><i className="lg-bio"/>Parcelles bio</span>}{active.includes("farms")&&<span><i className="lg-farm"/>Exploitations</span>}{active.includes("coops")&&<span><i className="lg-coop"/>Coopératives</span>}{active.includes("equipment")&&<span><i className="lg-equipment"/>Matériel agricole</span>}{active.includes("hedges")&&<span><i className="lg-hedge"/>Haies</span>}{active.includes("water")&&<span><i className="lg-water"/>Cours d’eau</span>}{active.includes("cadastre")&&<span><i className="lg-cadastre"/>Parcelles cadastrales</span>}</div>}
         {view==="data"&&<Dashboard/>}
       </section>
 
