@@ -360,7 +360,7 @@ export default function Home() {
       <section class="section"><h2>Localisation et identification</h2><div class="grid"><div class="card"><small>Commune</small><b>${safe(commune?.name)}</b><br>Code INSEE ${safe(commune?.code)}</div><div class="card"><small>Coordonnées WGS84</small><b>${coordinates[1].toFixed(6)}, ${coordinates[0].toFixed(6)}</b><br><span class="url">openstreetmap.org · zoom 17</span></div><div class="card"><small>Identifiant RPG ${parcel.year}</small><b>${safe(parcel.id)}</b><br>Code culture ${safe(parcel.code)} · groupe ${safe(parcel.group)}</div><div class="card"><small>Référence cadastrale</small><b>${cadastre?`${safe(cadastre.section)} ${safe(cadastre.numero)}`:"Non trouvée"}</b><br>${cadastre?`IDU ${safe(cadastre.idu)} · ${cadastre.contenance.toLocaleString("fr-FR")} m²`:"Cadastre interrogé au point sélectionné"}</div></div><div class="facts"><div class="fact"><small>Millésimes trouvés</small><b>${parcel.history.length}</b></div><div class="fact"><small>Cultures distinctes</small><b>${uniqueCrops}</b></div><div class="fact"><small>Période observée</small><b>${Math.min(...parcel.history.map(h=>h.year))}–${Math.max(...parcel.history.map(h=>h.year))}</b></div></div></section>
       <section class="section"><h2>Frise de l’historique cultural</h2><div class="timeline">${timeline}</div>${parcel.historyUnavailable.length?`<p class="unavailable">Millésimes momentanément indisponibles : ${parcel.historyUnavailable.join(", ")}.</p>`:""}</section>
       <p class="source"><b>Source :</b> Registre parcellaire graphique (RPG), ASP / IGN. Les cultures correspondent aux déclarations PAC publiées pour chaque millésime. L’historique est recherché au point sélectionné ; une évolution des contours peut entraîner un changement d’identifiant ou de surface. La surface est celle publiée par la source, sans recalcul. Cette fiche ne contient pas l’identité de l’exploitant.</p>
-      <footer class="footer"><span>Observatoire de l’agriculture du Val-d’Oise</span><span>Fiche générée le 27/07/2026</span></footer></main>
+      <footer class="footer"><span>Agriculture du Val-d’Oise</span><span>Fiche générée le 27/07/2026</span></footer></main>
       </body></html>`);
       report.document.close();
     }catch{report.document.body.innerHTML="<p>La fiche n’a pas pu charger ses ressources. Fermez cette fenêtre et réessayez.</p>";}
@@ -368,7 +368,7 @@ export default function Home() {
 
   return <main className="shell">
     <header className="institutional">
-      <div className="brand"><img src="prefet-val-doise-logo.png" alt="Préfet du Val-d’Oise"/><div><span>AGRICULTURE ET TERRITOIRES · VAL-D’OISE</span><strong>Observatoire de l’agriculture</strong><small><b>Val-d’Oise</b> · cultures · exploitations · bio · haies</small></div></div>
+      <div className="brand"><img src="prefet-val-doise-logo.png" alt="Préfet du Val-d’Oise"/><div><span>AGRICULTURE ET TERRITOIRES · VAL-D’OISE</span><strong>Agriculture</strong><small><b>Val-d’Oise</b> · cultures · exploitations · bio · haies</small></div></div>
       <div className="header-status"><i/><p><strong>{farmCount?`${farmCount.toLocaleString("fr-FR")} exploitations agricoles`:"Chargement des exploitations"}</strong><small>SIRENE · établissements actifs géolocalisés</small></p></div>
     </header>
 
