@@ -84,7 +84,7 @@ export default function Home() {
   const [coordinates, setCoordinates] = useState<[number,number] | null>(null);
   const [zoom, setZoom] = useState(10);
   const [farmCount, setFarmCount] = useState(0);
-  const [dataOpen, setDataOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [basemap, setBasemap] = useState<"plan"|"ortho">("plan");
 
   useEffect(() => {
@@ -377,7 +377,7 @@ export default function Home() {
         <h1>Rechercher et comprendre<br/><span>l’agriculture</span></h1>
         <form onSubmit={search} className="search"><div><input aria-label="Rechercher une commune" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Adresse ou commune…"/><button aria-label="Rechercher">Rechercher</button></div></form>
         <div className="reading"><b>Lecture de la carte</b><p>Activez les informations utiles, puis cliquez sur une parcelle ou une exploitation pour ouvrir sa fiche.</p></div>
-        <div className="main-actions"><button onClick={reset}>Recentrer le Val-d’Oise</button><button onClick={()=>setDataOpen(true)}>Données & évolutions</button></div>
+        <div className="quick-actions"><button onClick={reset}>Recentrer</button><button onClick={()=>dialogRef.current?.showModal()}>Données & évolutions</button></div>
         <section className="purpose"><h3>À quoi sert cet outil ?</h3><p>Localiser les exploitations agricoles, identifier les cultures déclarées et croiser les données utiles à la connaissance du territoire.</p></section>
         <button className="layers-title" onClick={()=>setLayersOpen(!layersOpen)}><span>Couches de la carte</span><b>{active.length} actives {layersOpen?"−":"+"}</b></button>
         {layersOpen&&<div className="layer-list">{layers.map(l=><label key={l.id} className="layer-row"><input type="checkbox" checked={active.includes(l.id)} onChange={()=>toggleLayer(l.id)}/><i style={{background:l.color}}/><span><strong>{l.label}</strong><small>{l.detail}</small></span></label>)}</div>}
@@ -389,12 +389,10 @@ export default function Home() {
         <div className="legend"><b>Légende</b>{active.includes("rpg")&&<span><i className="lg-rpg"/>Cultures RPG</span>}{active.includes("bio")&&<span><i className="lg-bio"/>Parcelles bio</span>}{active.includes("farms")&&<span><i className="lg-farm"/>Exploitations</span>}{active.includes("coops")&&<span><i className="lg-coop"/>Coopératives</span>}{active.includes("equipment")&&<span><i className="lg-equipment"/>Matériel agricole</span>}{active.includes("hedges")&&<span><i className="lg-hedge"/>Haies</span>}{active.includes("water")&&<span><i className="lg-water"/>Cours d’eau</span>}{active.includes("cadastre")&&<span><i className="lg-cadastre"/>Parcelles cadastrales</span>}</div>
       </section>
 
-      {dataOpen&&<div className="dash-overlay" onClick={()=>setDataOpen(false)}>
-        <div className="dash-modal" onClick={e=>e.stopPropagation()}>
-          <button className="dash-close" onClick={()=>setDataOpen(false)} aria-label="Fermer">×</button>
-          <Dashboard/>
-        </div>
-      </div>}
+      <dialog ref={dialogRef} className="dialog dashboard-dialog" onClick={e=>{ if(e.target===dialogRef.current) dialogRef.current?.close(); }}>
+        <button className="dialog-close" onClick={()=>dialogRef.current?.close()} aria-label="Fermer">×</button>
+        <Dashboard/>
+      </dialog>
 
       {drawer&&<aside className="drawer">
         <button className="close" onClick={clearSelection} aria-label="Fermer et effacer la sélection">×</button>
@@ -415,27 +413,28 @@ export default function Home() {
 }
 
 function Dashboard(){
-  return <div className="dashboard">
-    <div className="dash-head"><div><small>VAL-D’OISE · SÉRIE 2010–2024</small><h2>L’agriculture en chiffres</h2><p>Un tableau de bord pour suivre les surfaces, les productions et les dynamiques territoriales.</p></div><div className="dash-source">RPG · Agreste/SSP · Agence Bio</div></div>
-    <div className="kpis">
+  return <>
+    <div className="dialog-header"><span className="eyebrow">VAL-D’OISE · SÉRIE 2010–2024</span><h2>L’agriculture en chiffres</h2><p>Un tableau de bord pour suivre les surfaces, les productions et les dynamiques territoriales. Sources : RPG · Agreste/SSP · Agence Bio.</p></div>
+    <div className="dashboard-kpis">
       <Kpi label="Surface agricole déclarée" value="57 521 ha" delta="−2,2 % depuis 2015"/>
       <Kpi label="Surface certifiée bio" value="902 ha" delta="+20,4 % depuis 2019" positive/>
       <Kpi label="Exploitations agricoles" value="520" delta="Recensement agricole 2020"/>
       <Kpi label="Emplois agricoles" value="1 046 ETP" delta="Recensement agricole 2020"/>
     </div>
-    <div className="charts-grid">
-      <article className="chart-card wide"><ChartTitle title="Évolution de la surface agricole déclarée" subtitle="Hectares · RPG 2015–2024"/><LineChart data={sauTrend} color="#000091" unit=" ha"/><p className="insight">La surface déclarée recule de 1 298 ha en neuf ans, malgré un léger rebond en 2021.</p></article>
+    <div className="dashboard-grid">
+      <article className="chart-card span-3"><ChartTitle title="Évolution de la surface agricole déclarée" subtitle="Hectares · RPG 2015–2024"/><LineChart data={sauTrend} color="#000091" unit=" ha"/><p className="insight">La surface déclarée recule de 1 298 ha en neuf ans, malgré un léger rebond en 2021.</p></article>
       <article className="chart-card"><ChartTitle title="Progression des surfaces bio" subtitle="Hectares certifiés · 2019–2024"/><LineChart data={bioTrend} color="#18753c" unit=" ha"/><p className="insight">La bio progresse de 153 ha depuis 2019, avec un repli ponctuel en 2023.</p></article>
-      <article className="chart-card"><ChartTitle title="Principales cultures en 2024" subtitle="Surface déclarée en hectares"/><Bars data={cropMix.slice(0,6)} color="#dcae3e"/></article>
-      <article className="chart-card wide"><ChartTitle title="Productions végétales comparées" subtitle="Indice 100 en 2010 · tonnes produites · 2010–2024"/><IndexedLines/><p className="insight">Le maïs dépasse son niveau de 2010 ; le blé et la betterave terminent 2024 nettement en retrait.</p></article>
-      <article className="chart-card wide"><ChartTitle title="Communes les plus agricoles" subtitle="Surface agricole déclarée en 2024 · hectares"/><Bars data={communeRanking} color="#000091"/></article>
-      <article className="chart-card wide"><ChartTitle title="Ventes de produits phytosanitaires" subtitle="Tonnes de substances actives vendues dans le Val-d’Oise · 2014–2023"/><LineChart data={phytoTrend} color="#c43c00" unit=" t"/><div className="phyto-facts"><span><b>158 t</b> vendues en 2023</span><span><b>−11,6 %</b> par rapport à 2022</span><span><b>27,3 t</b> de glyphosate</span><span><b>76</b> substances</span></div><p className="insight warning">Ces ventes départementales ne décrivent ni l’usage ni le traitement d’une parcelle précise. Elles sont donc présentées en dataviz et non comme une couche parcellaire.</p></article>
+      <article className="chart-card"><ChartTitle title="Principales cultures en 2024" subtitle="Surface déclarée en hectares"/><Bars data={cropMix.slice(0,6)}/></article>
+      <article className="dashboard-note"><span>COMMENT LIRE</span><h3>Deux sources, deux échelles</h3><p>Le RPG décrit les surfaces déclarées à la parcelle ; le recensement agricole et Agreste comptent les exploitations et leurs emplois. Ces séries ne se recoupent pas millésime par millésime.</p></article>
+      <article className="chart-card span-3"><ChartTitle title="Productions végétales comparées" subtitle="Indice 100 en 2010 · tonnes produites · 2010–2024"/><IndexedLines/><p className="insight">Le maïs dépasse son niveau de 2010 ; le blé et la betterave terminent 2024 nettement en retrait.</p></article>
+      <article className="chart-card span-3"><ChartTitle title="Communes les plus agricoles" subtitle="Surface agricole déclarée en 2024 · hectares"/><Bars data={communeRanking}/></article>
+      <article className="chart-card span-2"><ChartTitle title="Ventes de produits phytosanitaires" subtitle="Tonnes de substances actives vendues dans le Val-d’Oise · 2014–2023"/><LineChart data={phytoTrend} color="#c43c00" unit=" t"/><div className="phyto-facts"><span><b>158 t</b> vendues en 2023</span><span><b>−11,6 %</b> par rapport à 2022</span><span><b>27,3 t</b> de glyphosate</span><span><b>76</b> substances</span></div><p className="insight warning">Ces ventes départementales ne décrivent ni l’usage ni le traitement d’une parcelle précise.</p></article>
+      <article className="dashboard-note"><span>SOURCES ET PRÉCAUTIONS</span><h3>Lecture indépendante</h3><p>RPG IGN/ASP pour les surfaces déclarées ; Agreste/SSP pour les productions ; CartoBio et Agence Bio pour le bio ; BNV-D/Hub’Eau pour les ventes phytosanitaires. Les établissements SIRENE et les exploitations du recensement ne répondent pas à la même définition.</p></article>
     </div>
-    <footer className="dash-notes"><b>Sources et précautions</b><span>RPG IGN/ASP pour les surfaces déclarées ; Agreste/SSP pour les productions et le recensement agricole ; CartoBio et Agence Bio pour les données biologiques ; BNV-D / Hub’Eau pour les ventes de produits phytosanitaires. Les ventes ne permettent pas de localiser l’utilisation à la parcelle. Les établissements SIRENE et les exploitations du recensement agricole ne répondent pas à la même définition.</span></footer>
-  </div>
+  </>
 }
-function Kpi({label,value,delta,positive=false}:{label:string,value:string,delta:string,positive?:boolean}){return <div className="kpi"><small>{label}</small><strong>{value}</strong><span className={positive?"positive":""}>{delta}</span></div>}
-function ChartTitle({title,subtitle}:{title:string,subtitle:string}){return <header className="chart-title"><h3>{title}</h3><p>{subtitle}</p></header>}
+function Kpi({label,value,delta,positive=false}:{label:string,value:string,delta:string,positive?:boolean}){return <article><small>{label}</small><strong>{value}</strong><span className={positive?"positive":""}>{delta}</span></article>}
+function ChartTitle({title,subtitle}:{title:string,subtitle:string}){return <><h3>{title}</h3><p>{subtitle}</p></>}
 function LineChart({data,color,unit}:{data:{year:number,value:number}[],color:string,unit:string}){
   const w=620,h=205,p={l:52,r:18,t:14,b:32},min=Math.min(...data.map(d=>d.value)),max=Math.max(...data.map(d=>d.value)),pad=(max-min)*.16||1;
   const lo=min-pad,hi=max+pad,x=(i:number)=>p.l+i*(w-p.l-p.r)/(data.length-1),y=(v:number)=>p.t+(hi-v)*(h-p.t-p.b)/(hi-lo);
@@ -446,9 +445,9 @@ function LineChart({data,color,unit}:{data:{year:number,value:number}[],color:st
     {data.map((d,i)=><g key={d.year}><circle cx={x(i)} cy={y(d.value)} r="3.5" fill="#fff" stroke={color} strokeWidth="2"/>{(i===0||i===data.length-1)&&<text x={x(i)} y={y(d.value)-10} textAnchor={i===0?"start":"end"} className="point-label">{d.value.toLocaleString("fr-FR")}{unit}</text>}<text x={x(i)} y={h-9} textAnchor="middle">{d.year}</text></g>)}
   </svg>
 }
-function Bars({data,color}:{data:[string,number][],color:string}){
+function Bars({data}:{data:[string,number][]}){
   const max=Math.max(...data.map(d=>d[1]));
-  return <div className="bars">{data.map(([label,value],i)=><div className="bar-row" key={label}><span>{label}</span><i><em style={{width:`${value/max*100}%`,background:color}}/></i><b>{value.toLocaleString("fr-FR")} ha</b></div>)}</div>
+  return <>{data.map(([label,value])=><div className="bar-row" key={label}><span title={label}>{label}</span><div className="bar-track"><i style={{["--pct" as any]:`${Math.max(6,value/max*100)}%`}}/></div><b>{value.toLocaleString("fr-FR")} ha</b></div>)}</>
 }
 function IndexedLines(){
   const w=760,h=230,p={l:45,r:22,t:20,b:34},indexed=productionSeries.map(s=>({...s,values:s.values.map(v=>v/s.values[0]*100)}));
