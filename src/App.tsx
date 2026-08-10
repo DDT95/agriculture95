@@ -377,7 +377,7 @@ export default function Home() {
         <h1>Rechercher et comprendre<br/><span>l’agriculture</span></h1>
         <form onSubmit={search} className="search"><div><input aria-label="Rechercher une commune" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Adresse ou commune…"/><button aria-label="Rechercher">Rechercher</button></div></form>
         <div className="reading"><b>Lecture de la carte</b><p>Activez les informations utiles, puis cliquez sur une parcelle ou une exploitation pour ouvrir sa fiche.</p></div>
-        <div className="main-actions"><button onClick={reset}>Recentrer le Val-d’Oise</button><button onClick={()=>mapRef.current?.locate({setView:true,maxZoom:15})}>Me localiser</button></div>
+        <div className="main-actions"><button onClick={reset}>Recentrer le Val-d’Oise</button></div>
         <nav className="view-switch" aria-label="Mode d’affichage"><button className={view==="map"?"active":""} onClick={()=>setView("map")}>Carte</button><button className={view==="data"?"active":""} onClick={()=>setView("data")}>Données & évolutions</button></nav>
         <section className="purpose"><h3>À quoi sert cet outil ?</h3><p>Localiser les exploitations agricoles, identifier les cultures déclarées et croiser les données utiles à la connaissance du territoire.</p></section>
         {view==="map"&&<><button className="layers-title" onClick={()=>setLayersOpen(!layersOpen)}><span>Couches de la carte</span><b>{active.length} actives {layersOpen?"−":"+"}</b></button>
