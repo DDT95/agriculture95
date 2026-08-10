@@ -84,7 +84,7 @@ export default function Home() {
   const [coordinates, setCoordinates] = useState<[number,number] | null>(null);
   const [zoom, setZoom] = useState(10);
   const [farmCount, setFarmCount] = useState(0);
-  const [view, setView] = useState<"map"|"data">("map");
+  const [dataOpen, setDataOpen] = useState(false);
   const [basemap, setBasemap] = useState<"plan"|"ortho">("plan");
 
   useEffect(() => {
@@ -377,20 +377,24 @@ export default function Home() {
         <h1>Rechercher et comprendre<br/><span>l’agriculture</span></h1>
         <form onSubmit={search} className="search"><div><input aria-label="Rechercher une commune" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Adresse ou commune…"/><button aria-label="Rechercher">Rechercher</button></div></form>
         <div className="reading"><b>Lecture de la carte</b><p>Activez les informations utiles, puis cliquez sur une parcelle ou une exploitation pour ouvrir sa fiche.</p></div>
-        <div className="main-actions"><button onClick={reset}>Recentrer le Val-d’Oise</button></div>
-        <nav className="view-switch" aria-label="Mode d’affichage"><button className={view==="map"?"active":""} onClick={()=>setView("map")}>Carte</button><button className={view==="data"?"active":""} onClick={()=>setView("data")}>Données & évolutions</button></nav>
+        <div className="main-actions"><button onClick={reset}>Recentrer le Val-d’Oise</button><button onClick={()=>setDataOpen(true)}>Données & évolutions</button></div>
         <section className="purpose"><h3>À quoi sert cet outil ?</h3><p>Localiser les exploitations agricoles, identifier les cultures déclarées et croiser les données utiles à la connaissance du territoire.</p></section>
-        {view==="map"&&<><button className="layers-title" onClick={()=>setLayersOpen(!layersOpen)}><span>Couches de la carte</span><b>{active.length} actives {layersOpen?"−":"+"}</b></button>
-        {layersOpen&&<div className="layer-list">{layers.map(l=><label key={l.id} className="layer-row"><input type="checkbox" checked={active.includes(l.id)} onChange={()=>toggleLayer(l.id)}/><i style={{background:l.color}}/><span><strong>{l.label}</strong><small>{l.detail}</small></span></label>)}</div>}</>}
-        {view==="map"&&<div className="basemap-choice"><strong>Fond de carte</strong><div><button className={basemap==="plan"?"active":""} onClick={()=>setBasemap("plan")}>Plan neutre</button><button className={basemap==="ortho"?"active":""} onClick={()=>setBasemap("ortho")}>Photo aérienne</button></div></div>}
-        {view==="data"&&<div className="data-menu"><strong>Tableau de bord départemental</strong><small>2010–2024 · données agricoles ouvertes</small><p>Surfaces, productions, agriculture biologique et comparaison des communes.</p></div>}
+        <button className="layers-title" onClick={()=>setLayersOpen(!layersOpen)}><span>Couches de la carte</span><b>{active.length} actives {layersOpen?"−":"+"}</b></button>
+        {layersOpen&&<div className="layer-list">{layers.map(l=><label key={l.id} className="layer-row"><input type="checkbox" checked={active.includes(l.id)} onChange={()=>toggleLayer(l.id)}/><i style={{background:l.color}}/><span><strong>{l.label}</strong><small>{l.detail}</small></span></label>)}</div>}
+        <div className="basemap-choice"><strong>Fond de carte</strong><div><button className={basemap==="plan"?"active":""} onClick={()=>setBasemap("plan")}>Plan neutre</button><button className={basemap==="ortho"?"active":""} onClick={()=>setBasemap("ortho")}>Photo aérienne</button></div></div>
       </aside>
 
       <section className="map-zone">
-        <div ref={mapEl} className={`map ${view==="data"?"map-hidden":""}`} aria-label="Carte agricole interactive du Val-d’Oise"/>
-        {view==="map"&&<div className="legend"><b>Légende</b>{active.includes("rpg")&&<span><i className="lg-rpg"/>Cultures RPG</span>}{active.includes("bio")&&<span><i className="lg-bio"/>Parcelles bio</span>}{active.includes("farms")&&<span><i className="lg-farm"/>Exploitations</span>}{active.includes("coops")&&<span><i className="lg-coop"/>Coopératives</span>}{active.includes("equipment")&&<span><i className="lg-equipment"/>Matériel agricole</span>}{active.includes("hedges")&&<span><i className="lg-hedge"/>Haies</span>}{active.includes("water")&&<span><i className="lg-water"/>Cours d’eau</span>}{active.includes("cadastre")&&<span><i className="lg-cadastre"/>Parcelles cadastrales</span>}</div>}
-        {view==="data"&&<Dashboard/>}
+        <div ref={mapEl} className="map" aria-label="Carte agricole interactive du Val-d’Oise"/>
+        <div className="legend"><b>Légende</b>{active.includes("rpg")&&<span><i className="lg-rpg"/>Cultures RPG</span>}{active.includes("bio")&&<span><i className="lg-bio"/>Parcelles bio</span>}{active.includes("farms")&&<span><i className="lg-farm"/>Exploitations</span>}{active.includes("coops")&&<span><i className="lg-coop"/>Coopératives</span>}{active.includes("equipment")&&<span><i className="lg-equipment"/>Matériel agricole</span>}{active.includes("hedges")&&<span><i className="lg-hedge"/>Haies</span>}{active.includes("water")&&<span><i className="lg-water"/>Cours d’eau</span>}{active.includes("cadastre")&&<span><i className="lg-cadastre"/>Parcelles cadastrales</span>}</div>
       </section>
+
+      {dataOpen&&<div className="dash-overlay" onClick={()=>setDataOpen(false)}>
+        <div className="dash-modal" onClick={e=>e.stopPropagation()}>
+          <button className="dash-close" onClick={()=>setDataOpen(false)} aria-label="Fermer">×</button>
+          <Dashboard/>
+        </div>
+      </div>}
 
       {drawer&&<aside className="drawer">
         <button className="close" onClick={clearSelection} aria-label="Fermer et effacer la sélection">×</button>
