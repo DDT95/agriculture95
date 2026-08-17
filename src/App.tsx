@@ -144,6 +144,10 @@ export default function Home() {
       loadFarms(map);
       loadServices(map,"coops","data/cooperatives-agricoles-95.geojson","Coopérative","♟");
       loadServices(map,"equipment","data/materiel-agricole-95.geojson","Matériel agricole","⚙");
+      // Lecture seule pour la fenêtre d'impression (print.html) : aucune
+      // donnée ni fonction n'est dupliquée, print.js lit cet état via
+      // window.opener.agriPrintApp une fois ouverte depuis cette page.
+      (window as any).agriPrintApp={layers,wmts,mapRef,activeRef};
     };
     if(window.L) boot(); else {
       const link=document.createElement("link"); link.rel="stylesheet"; link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"; document.head.appendChild(link);
@@ -382,6 +386,7 @@ export default function Home() {
         <button className="layers-title" onClick={()=>setLayersOpen(!layersOpen)}><span>Couches de la carte</span><b>{active.length} actives {layersOpen?"−":"+"}</b></button>
         {layersOpen&&<div className="layer-list">{layers.map(l=><label key={l.id} className="layer-row"><input type="checkbox" checked={active.includes(l.id)} onChange={()=>toggleLayer(l.id)}/><i style={{background:l.color}}/><span><strong>{l.label}</strong><small>{l.detail}</small></span></label>)}</div>}
         <div className="basemap-choice"><strong>Fond de carte</strong><div><button className={basemap==="plan"?"active":""} onClick={()=>setBasemap("plan")}>Plan neutre</button><button className={basemap==="ortho"?"active":""} onClick={()=>setBasemap("ortho")}>Photo aérienne</button></div></div>
+        <button className="print-map-button" onClick={()=>window.open("print.html","_blank")}>Imprimer la carte (A3)</button>
       </aside>
 
       <section className="map-zone">
